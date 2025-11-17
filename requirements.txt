@@ -4,7 +4,5 @@ plotly==5.20.0
 datasets==2.16.1
 Pillow==10.2.0
 numpy==1.26.3
-torch==2.2.0
-torchvision==0.17.0
 requests==2.31.0
 huggingface-hub==0.20.3
