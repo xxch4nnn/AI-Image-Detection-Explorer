@@ -1,0 +1,10 @@
+streamlit==1.29.0
+pandas==2.1.4
+plotly==5.18.0
+datasets==2.16.1
+Pillow==10.1.0
+numpy==1.26.3
+torch==2.1.2
+torchvision==0.16.2
+requests==2.31.0
+huggingface-hub==0.20.2
