@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from datasets import load_dataset
+from datasets import load_dataset, concatenate_datasets
 from PIL import Image
 import numpy as np
 import random
@@ -52,7 +52,9 @@ def load_image_dataset():
     try:
         # Using a lightweight AI-generated image detection dataset
         # This dataset contains real and AI-generated images
-        dataset = load_dataset("poloclub/diffusiondb", "2m_random_1k", split="train")
+        train_dataset = load_dataset("dragonintelligence/CIFAKE-image-dataset", split="train")
+        test_dataset = load_dataset("dragonintelligence/CIFAKE-image-dataset", split="test")
+        dataset = concatenate_datasets([train_dataset, test_dataset])
         return dataset
     except Exception as e:
         st.error(f"Error loading dataset: {e}")
@@ -79,33 +81,6 @@ def load_classification_model():
     except Exception as e:
         st.warning(f"Could not load model: {e}")
         return None, None
-
-def prepare_metadata(dataset):
-    """Extract and prepare metadata from dataset"""
-    try:
-        metadata_list = []
-        
-        for idx, item in enumerate(dataset):
-            if idx >= 1000:  # Limit for performance
-                break
-            
-            metadata = {
-                'index': idx,
-                'prompt': item.get('prompt', 'N/A')[:100],  # Truncate long prompts
-                'seed': item.get('seed', 'N/A'),
-                'step': item.get('step', 'N/A'),
-                'cfg': item.get('cfg', 'N/A'),
-                'sampler': item.get('sampler', 'N/A'),
-                'width': item.get('width', 'N/A'),
-                'height': item.get('height', 'N/A'),
-            }
-            metadata_list.append(metadata)
-        
-        df = pd.DataFrame(metadata_list)
-        return df
-    except Exception as e:
-        st.error(f"Error preparing metadata: {e}")
-        return pd.DataFrame()
 
 def main():
     # Header
@@ -140,39 +115,38 @@ def main():
             st.markdown("""
             ### About This Application
             
-            This interactive web application explores the **DiffusionDB** dataset, a collection of 
-            AI-generated images created using Stable Diffusion. The dataset provides insights into:
+            This interactive web application explores the **CIFAKE** dataset, a collection of
+            real and AI-generated images. The dataset is designed for image classification tasks.
             
-            - 🎨 **Image Generation**: Prompts, parameters, and configurations
-            - 📊 **Distribution Analysis**: Statistics on generation methods
-            - 🔍 **Visual Exploration**: Interactive image browsing
-            - 🤖 **ML Classification**: Pre-trained model predictions
+            - 📊 **Distribution Analysis**: Statistics on real vs. AI-generated images.
+            - 🔍 **Visual Exploration**: Interactive image browsing and filtering.
+            - 🤖 **ML Classification**: Pre-trained model predictions.
             
             ### Dataset Overview
             
-            - **Source**: Hugging Face DiffusionDB
-            - **Type**: AI-Generated Images (Stable Diffusion)
-            - **Size**: 1,000+ images with metadata
-            - **Features**: Prompts, seeds, samplers, and generation parameters
+            - **Source**: Hugging Face (dragonintelligence/CIFAKE-image-dataset)
+            - **Type**: Real and AI-Generated Images
+            - **Size**: 120,000 images
+            - **Features**: Images and corresponding labels (real/AI-generated).
             
             ### How to Use
             
-            1. **Dataset Explorer**: Browse images and filter by parameters
-            2. **Statistics**: View distribution charts and insights
-            3. **Random Gallery**: Discover random images from the dataset
-            4. **ML Classification**: Upload your own images for analysis
+            1. **Dataset Explorer**: Browse images and filter by type (Real/AI-Generated).
+            2. **Statistics**: View distribution charts.
+            3. **Random Gallery**: Discover random images from the dataset.
+            4. **ML Classification**: Upload your own images for analysis.
             """)
         
         with col2:
             st.info("### Quick Stats")
             st.metric("Total Images", len(dataset))
-            st.metric("Data Source", "DiffusionDB")
-            st.metric("Image Type", "AI-Generated")
+            st.metric("Data Source", "CIFAKE")
+            st.metric("Image Types", "Real & AI-Generated")
             
             # Sample image
             if len(dataset) > 0:
                 st.markdown("### Sample Image")
-                sample_idx = random.randint(0, min(len(dataset)-1, 100))
+                sample_idx = random.randint(0, len(dataset)-1)
                 sample_image = dataset[sample_idx]['image']
                 st.image(sample_image, use_column_width=True)
     
@@ -180,79 +154,46 @@ def main():
     with tab2:
         st.header("📊 Dataset Explorer")
         
-        # Prepare metadata
-        with st.spinner("Preparing metadata..."):
-            df_metadata = prepare_metadata(dataset)
-        
-        if df_metadata.empty:
-            st.warning("No metadata available")
-            return
-        
-        st.subheader("Dataset Metadata")
-        st.dataframe(df_metadata, use_container_width=True, height=300)
-        
-        # Download button
-        csv = df_metadata.to_csv(index=False)
-        st.download_button(
-            label="📥 Download Metadata CSV",
-            data=csv,
-            file_name="diffusiondb_metadata.csv",
-            mime="text/csv"
-        )
-        
-        st.markdown("---")
-        
+        st.subheader("Dataset Overview")
+        st.write("The CIFAKE dataset contains real and AI-generated images. You can filter them below.")
+
         # Filters
         st.subheader("🔍 Interactive Filters")
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         
         with col1:
-            # Sampler filter
-            samplers = df_metadata['sampler'].unique()
-            selected_sampler = st.selectbox(
-                "Select Sampler",
-                ["All"] + list(samplers)
+            # Image type filter
+            selected_type = st.selectbox(
+                "Select Image Type",
+                ["All", "Real", "AI-Generated"]
             )
         
         with col2:
-            # Step range
-            if 'step' in df_metadata.columns and df_metadata['step'].dtype != 'object':
-                step_range = st.slider(
-                    "Generation Steps",
-                    int(df_metadata['step'].min()) if df_metadata['step'].min() != 'N/A' else 0,
-                    int(df_metadata['step'].max()) if df_metadata['step'].max() != 'N/A' else 100,
-                    (0, 100)
-                )
-            else:
-                step_range = None
-        
-        with col3:
             # Number of images to display
             num_images = st.slider("Images to Display", 1, 20, 8)
-        
+
         # Apply filters
-        filtered_df = df_metadata.copy()
-        if selected_sampler != "All":
-            filtered_df = filtered_df[filtered_df['sampler'] == selected_sampler]
-        
-        st.success(f"Found {len(filtered_df)} images matching filters")
+        if selected_type == "All":
+            filtered_dataset = dataset
+        elif selected_type == "Real":
+            filtered_dataset = dataset.filter(lambda example: example['label'] == 0)
+        else: # AI-Generated
+            filtered_dataset = dataset.filter(lambda example: example['label'] == 1)
+
+        st.success(f"Found {len(filtered_dataset)} images matching filters")
         
         # Display filtered images
         st.subheader("🖼️ Image Gallery")
         
         cols = st.columns(4)
-        for idx, row in filtered_df.head(num_images).iterrows():
-            with cols[idx % 4]:
+        for i in range(min(num_images, len(filtered_dataset))):
+            with cols[i % 4]:
                 try:
-                    img = dataset[int(row['index'])]['image']
-                    st.image(img, use_column_width=True)
-                    
-                    with st.expander("View Details"):
-                        st.write(f"**Prompt**: {row['prompt']}")
-                        st.write(f"**Sampler**: {row['sampler']}")
-                        st.write(f"**Steps**: {row['step']}")
-                        st.write(f"**CFG**: {row['cfg']}")
+                    item = filtered_dataset[i]
+                    img = item['image']
+                    label = "AI-Generated" if item['label'] == 1 else "Real"
+                    st.image(img, use_column_width=True, caption=label)
                 except Exception as e:
                     st.error(f"Error loading image: {e}")
     
@@ -260,94 +201,38 @@ def main():
     with tab3:
         st.header("📈 Dataset Statistics & Insights")
         
-        df_metadata = prepare_metadata(dataset)
-        
-        if df_metadata.empty:
-            st.warning("No data available for statistics")
-            return
-        
         # Key metrics
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3 = st.columns(3)
         
         with col1:
             st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.metric("Total Images", len(df_metadata))
+            st.metric("Total Images", len(dataset))
             st.markdown('</div>', unsafe_allow_html=True)
         
+        label_counts = Counter(dataset['label'])
+
         with col2:
             st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            unique_samplers = df_metadata['sampler'].nunique()
-            st.metric("Unique Samplers", unique_samplers)
+            st.metric("Real Images", label_counts[0])
             st.markdown('</div>', unsafe_allow_html=True)
-        
+
         with col3:
             st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            avg_steps = df_metadata['step'].apply(
-                lambda x: float(x) if x != 'N/A' and str(x).replace('.','').isdigit() else 0
-            ).mean()
-            st.metric("Avg. Steps", f"{avg_steps:.1f}")
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        with col4:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.metric("Data Quality", "High")
+            st.metric("AI-Generated Images", label_counts[1])
             st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown("---")
         
         # Charts
-        col1, col2 = st.columns(2)
+        st.subheader("📊 Image Type Distribution")
         
-        with col1:
-            st.subheader("📊 Sampler Distribution")
-            sampler_counts = df_metadata['sampler'].value_counts()
-            fig = px.pie(
-                values=sampler_counts.values,
-                names=sampler_counts.index,
-                title="Distribution of Sampling Methods",
-                color_discrete_sequence=px.colors.qualitative.Set3
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            st.subheader("📊 Generation Steps Distribution")
-            # Filter numeric steps
-            numeric_steps = df_metadata['step'].apply(
-                lambda x: float(x) if x != 'N/A' and str(x).replace('.','').isdigit() else None
-            ).dropna()
-            
-            if len(numeric_steps) > 0:
-                fig = px.histogram(
-                    numeric_steps,
-                    nbins=20,
-                    title="Distribution of Generation Steps",
-                    labels={'value': 'Steps', 'count': 'Frequency'},
-                    color_discrete_sequence=['#667eea']
-                )
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("No numeric step data available")
-        
-        # Additional insights
-        st.subheader("💡 Key Insights")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.info(f"""
-            **Most Common Sampler**: {df_metadata['sampler'].mode()[0] if not df_metadata['sampler'].mode().empty else 'N/A'}
-            
-            **Resolution Analysis**: Most images are generated at standard resolutions
-            optimized for Stable Diffusion models.
-            """)
-        
-        with col2:
-            st.success(f"""
-            **Dataset Diversity**: The dataset contains diverse prompts covering
-            various subjects, styles, and artistic directions.
-            
-            **Generation Quality**: High-quality outputs with proper parameter tuning.
-            """)
+        fig = px.pie(
+            values=label_counts.values(),
+            names=['Real', 'AI-Generated'],
+            title="Distribution of Image Types",
+            color_discrete_sequence=px.colors.qualitative.Set3
+        )
+        st.plotly_chart(fig, use_container_width=True)
     
     # TAB 4: RANDOM GALLERY
     with tab4:
@@ -362,19 +247,15 @@ def main():
             st.subheader("Random Image Selection")
             
             cols = st.columns(4)
-            random_indices = random.sample(range(min(len(dataset), 1000)), min(12, len(dataset)))
+            random_indices = random.sample(range(len(dataset)), min(12, len(dataset)))
             
             for idx, rand_idx in enumerate(random_indices):
                 with cols[idx % 4]:
                     try:
-                        img = dataset[rand_idx]['image']
-                        st.image(img, use_column_width=True)
-                        
-                        with st.expander("Metadata"):
-                            item = dataset[rand_idx]
-                            st.write(f"**Prompt**: {item.get('prompt', 'N/A')[:80]}...")
-                            st.write(f"**Sampler**: {item.get('sampler', 'N/A')}")
-                            st.write(f"**Steps**: {item.get('step', 'N/A')}")
+                        item = dataset[rand_idx]
+                        img = item['image']
+                        label = "AI-Generated" if item['label'] == 1 else "Real"
+                        st.image(img, use_column_width=True, caption=label)
                     except Exception as e:
                         st.error(f"Error: {e}")
     
@@ -456,7 +337,7 @@ def main():
             # Show example from dataset
             st.markdown("### Or Try with a Dataset Image")
             if st.button("Classify Random Dataset Image"):
-                rand_idx = random.randint(0, min(len(dataset)-1, 100))
+                rand_idx = random.randint(0, len(dataset)-1)
                 img = dataset[rand_idx]['image']
                 
                 col1, col2 = st.columns(2)
