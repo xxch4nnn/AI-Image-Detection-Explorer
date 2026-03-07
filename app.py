@@ -242,17 +242,17 @@ def main():
         st.subheader("🖼️ Image Gallery")
         
         cols = st.columns(4)
-        for idx, row in filtered_df.head(num_images).iterrows():
-            with cols[idx % 4]:
+        for i, row in enumerate(filtered_df.head(num_images).itertuples(index=True)):
+            with cols[i % 4]:
                 try:
-                    img = dataset[int(row['index'])]['image']
+                    img = dataset[int(row.index)]['image']
                     st.image(img, use_column_width=True)
                     
                     with st.expander("View Details"):
-                        st.write(f"**Prompt**: {row['prompt']}")
-                        st.write(f"**Sampler**: {row['sampler']}")
-                        st.write(f"**Steps**: {row['step']}")
-                        st.write(f"**CFG**: {row['cfg']}")
+                        st.write(f"**Prompt**: {row.prompt}")
+                        st.write(f"**Sampler**: {row.sampler}")
+                        st.write(f"**Steps**: {row.step}")
+                        st.write(f"**CFG**: {row.cfg}")
                 except Exception as e:
                     st.error(f"Error loading image: {e}")
     
